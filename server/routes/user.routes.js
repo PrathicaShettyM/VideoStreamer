@@ -17,6 +17,4 @@ router.route("/register").post(
     registerUser
 );
 
-
-
 export default router;
