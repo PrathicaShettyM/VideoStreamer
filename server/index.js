@@ -2,6 +2,8 @@ import express from "express";
 import dbConnect from "./db/dbConnect.js";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
+import cors from "cors";
+
 dotenv.config();
 
 const app = express();
@@ -31,6 +33,14 @@ dbConnect()
 .catch((err) => {
     console.log("Error connecting to the database");
 });
+
+// routes
+import userRouter from "./routes/user.routes.js"
+
+
+
+// routes declaration
+app.use("/api/v1/users", userRouter); // http://localhost:3000/api/v1/users/(it can be login, register or whtever)
 
 
 app.listen(process.env.PORT, () => {
