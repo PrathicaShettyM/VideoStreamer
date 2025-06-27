@@ -16,3 +16,6 @@ local db connection error: remove local host and put 127.0.0.1
 ![alt text](image-3.png)
 ![alt text](image-4.png)
 ![alt text](image-5.png)
+![alt text](image-6.png)
+
+![alt text](image-7.png)

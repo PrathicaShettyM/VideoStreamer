@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js";
 import {uploadOnCloudinary} from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 
 const generateAccessTokenAndRefreshTokens = async(userId) => {
     try {
@@ -328,6 +329,130 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, user, "Updated Cover Image successfully"));
 });
 
+const getUserChannelProfile = asyncHandler(async(req, res) => {
+    // when we try to get channel profile, we'll go to the url => use req.params
+    const {username} = req.params;
+    if(!username){
+        throw new ApiError(400, "Username is missing");
+    }
+
+    // here u can do directly User.find({username}) but again u need to find values based on id, which adds overhead to this, so go with aggregation pipelines
+    const channel = await User.aggregate([
+        {
+            $match: { // this is similar to 'where' clause in sql
+                username: username?.toLowerCase()
+            }
+        },
+        {
+            $lookup: { // this is similar to 'from' clause in sql 
+                from: "subscriptions", // from which table (here which document)
+                localField: "_id", // primary key
+                foreignField: "channel", // foreign key
+                as: "subscribers" // as: give the field a new name
+            }
+        },
+        {
+            $lookup: {
+                from: "subscriptions", // from which table (here which document)
+                localField: "_id", // primary key
+                foreignField: "subscriber", // foreign key
+                as: "subscribedTo" // as: give the field a new name
+            }
+        },
+        {
+            $addFields: {
+                subscribersCount: {
+                    $size: "$subscribers"
+                },
+                channelsSubscribedToCount: {
+                    $size: "$subscribedTo"
+                },
+                isSubscribed: { // check if the current user is subscribed to a channel or not
+                    $cond: {
+                        if: {$in: [req.user?._id, "$subscribers.subscriber"]},
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                fullname: 1,
+                username: 1,
+                subscribersCount: 1,
+                channelsSubscribedToCount: 1,
+                isSubscribed: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1
+            }
+        }
+    ])
+
+    console.log(channel);
+
+    if(!channel?.length){
+        throw new ApiError(404, "Channel doesnt exist");
+    }
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, channel[0], "User channel fetched successfully"))
+})
+// Write articles on this
+
+// interview question: object id datatype in mongodb: string type -> can be converted to number type using mongoose
+
+const getWatchHistory = asyncHandler(async(req, res) => {
+    const user = await User.aggregate([
+        {   // where
+            $match: { // in aggregation pipeline we cant use req.user._id directly coz it deals directly with the db n not with the mongoose layer
+                _id: new mongoose.Types.ObjectId(req.user._id)
+            }
+        },
+        {   // from
+            $lookup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
+                pipeline: [
+                    {   // select
+                        $lookup: {
+                            from: "users",
+                            localField: "owner",
+                            foreignField: "_id",
+                            as: "owner",
+                            pipeline: [
+                                {   // show only these fields
+                                    $project: { // similar to select field
+                                        fullname: 1,
+                                        username: 1,
+                                        avatar: 1
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                       $addFields: { // make it easy for frontend integration
+                        owner: {
+                            $first: "$owner", // or "arryEleAt" option
+                           }
+                       } 
+                    }
+                ]
+            }
+        }
+    ])
+
+    return res.status(200).json(new ApiResponse(200, user[0].watchHistory, "Watch history fetched successfully"))
+})
+
+
+
+
 export {
     registerUser,
     loginUser,
@@ -337,5 +462,7 @@ export {
     getCurrentUser,
     updateAccountDetails,
     updateUserAvatar,
-    updateUserCoverImage
+    updateUserCoverImage,
+    getUserChannelProfile,
+    getWatchHistory
 };
